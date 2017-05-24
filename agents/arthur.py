@@ -2,34 +2,18 @@
 A checkers agent implementation based on Arthur Samuel's historic program.
 """
 from utils import (
-    INFINITY, negamax, adv, cent, cntr, deny, kcent, mob, mov, thret, back,
-    piece_score_diff, position_score,
+    INF, adv, cent, cntr, deny, kcent, mob, mov, thret, back, piece_score_diff,
+    position_score, Player,
 )
 
 
-class ArthurPlayer():
-    def __init__(self, depth=5):
-        self.depth = depth
-
-    def best_move(self, board):
-        def search(move):
-            board_new = board.peek_move(move)
-            if board_new.active == board.active:
-                return negamax(
-                    board, board_new, self.depth, -INFINITY, INFINITY, 1, self.evaluate
-                )
-            else:
-                return negamax(
-                    board, board_new, self.depth, -INFINITY, INFINITY, -1, self.evaluate
-                )
-
-        return max(board.get_moves(), key=search)
+class ArthurPlayer(Player):
 
     def evaluate(self, board_old, board_new):
         if board_old.is_over():
-            return -INFINITY
+            return -INF
         if board_new.is_over():
-            return INFINITY
+            return INF
 
         _adv = adv(board_new) - adv(board_old)
         _back = adv(board_new) - back(board_old)
