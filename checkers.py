@@ -1,13 +1,10 @@
 """
-    This module defines the CheckerBoard class.
+This module defines the CheckerBoard class.
 """
-# Andrew Edwards -- almostimplemented.com
-# =======================================
-# A simple and efficient checker board class.
-#
-# Created July 29, 2014
 
-### CONSTANTS
+from copy import deepcopy
+
+# CONSTANTS
 
 # Black moves "forward", white moves "backward"
 BLACK, WHITE = 0, 1
@@ -19,12 +16,11 @@ BLACK, WHITE = 0, 1
 
 UNUSED_BITS = 0b100000000100000000100000000100000000
 
-### CLASSES
 
 class CheckerBoard:
     def __init__(self):
         """
-            Initiates board via new_game().
+        Initiates board via new_game().
         """
         self.forward = [None, None]
         self.backward = [None, None]
@@ -33,7 +29,7 @@ class CheckerBoard:
 
     def new_game(self):
         """
-            Resets current state to new game.
+        Resets current state to new game.
         """
         self.active = BLACK
         self.passive = WHITE
@@ -52,12 +48,15 @@ class CheckerBoard:
         self.mandatory_jumps = []
 
     def make_move(self, move):
-        """
-            Updates the game state to reflect the effects of the input
-            move.
+        self.update(move)
 
-            A legal move is represented by an integer with exactly two
-            bits turned on: the old position and the new position.
+    def update(self, move):
+        """
+        Updates the game state to reflect the effects of the input
+        move.
+
+        A legal move is represented by an integer with exactly two
+        bits turned on: the old position and the new position.
         """
         active = self.active
         passive = self.passive
@@ -95,76 +94,83 @@ class CheckerBoard:
 
     def peek_move(self, move):
         """
-            Updates the game state to reflect the effects of the input
-            move.
+        Updates the game state to reflect the effects of the input
+        move.
 
-            A legal move is represented by an integer with exactly two
-            bits turned on: the old position and the new position.
+        A legal move is represented by an integer with exactly two
+        bits turned on: the old position and the new position.
         """
-        B = self.copy()
-        active = B.active
-        passive = B.passive
+        board = self.copy()
+        active = board.active
+        passive = board.passive
         if move < 0:
             move *= -1
             taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(move)[::-1]) if b == '1')/2)
-            B.pieces[passive] ^= taken_piece
-            if B.forward[passive] & taken_piece:
-                B.forward[passive] ^= taken_piece
-            if B.backward[passive] & taken_piece:
-                B.backward[passive] ^= taken_piece
-            B.jump = 1
+            board.pieces[passive] ^= taken_piece
+            if board.forward[passive] & taken_piece:
+                board.forward[passive] ^= taken_piece
+            if board.backward[passive] & taken_piece:
+                board.backward[passive] ^= taken_piece
+            board.jump = 1
 
-        B.pieces[active] ^= move
-        if B.forward[active] & move:
-            B.forward[active] ^= move
-        if B.backward[active] & move:
-            B.backward[active] ^= move
+        board.pieces[active] ^= move
+        if board.forward[active] & move:
+            board.forward[active] ^= move
+        if board.backward[active] & move:
+            board.backward[active] ^= move
 
-        destination = move & B.pieces[active]
-        B.empty = UNUSED_BITS ^ (2**36 - 1) ^ (B.pieces[BLACK] | B.pieces[WHITE])
+        destination = move & board.pieces[active]
+        board.empty = UNUSED_BITS ^ (2**36 - 1) ^ (board.pieces[BLACK] | board.pieces[WHITE])
 
-        if B.jump:
-            B.mandatory_jumps = B.jumps_from(destination)
-            if B.mandatory_jumps:
-                return B
+        if board.jump:
+            board.mandatory_jumps = board.jumps_from(destination)
+            if board.mandatory_jumps:
+                return board
 
         if active == BLACK and (destination & 0x780000000) != 0:
-            B.backward[BLACK] |= destination
+            board.backward[BLACK] |= destination
         elif active == WHITE and (destination & 0xf) != 0:
-            B.forward[WHITE] |= destination
+            board.forward[WHITE] |= destination
 
-        B.jump = 0
-        B.active, B.passive = B.passive, B.active
+        board.jump = 0
+        board.active, board.passive = board.passive, board.active
 
-        return B
+        return board
 
     # These methods return an integer whose active bits are those squares
     # that can make the move indicated by the method name.
     def right_forward(self):
         return (self.empty >> 4) & self.forward[self.active]
+
     def left_forward(self):
         return (self.empty >> 5) & self.forward[self.active]
+
     def right_backward(self):
         return (self.empty << 4) & self.backward[self.active]
+
     def left_backward(self):
         return (self.empty << 5) & self.backward[self.active]
+
     def right_forward_jumps(self):
         return (self.empty >> 8) & (self.pieces[self.passive] >> 4) & self.forward[self.active]
+
     def left_forward_jumps(self):
         return (self.empty >> 10) & (self.pieces[self.passive] >> 5) & self.forward[self.active]
+
     def right_backward_jumps(self):
         return (self.empty << 8) & (self.pieces[self.passive] << 4) & self.backward[self.active]
+
     def left_backward_jumps(self):
         return (self.empty << 10) & (self.pieces[self.passive] << 5) & self.backward[self.active]
 
     def get_moves(self):
         """
-            Returns a list of all possible moves.
+        Returns a list of all possible moves.
 
-            A legal move is represented by an integer with exactly two
-            bits turned on: the old position and the new position.
+        A legal move is represented by an integer with exactly two
+        bits turned on: the old position and the new position.
 
-            Jumps are indicated with a negative sign.
+        Jumps are indicated with a negative sign.
         """
         # First check if we are in a jump sequence
         if self.jump:
@@ -182,21 +188,21 @@ class CheckerBoard:
             rb = self.right_backward()
             lb = self.left_backward()
 
-            moves =  [0x11 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+            moves = [0x11 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
             moves += [0x21 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
             moves += [0x11 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
             moves += [0x21 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
-            return moves
 
+            return moves
 
     def get_jumps(self):
         """
-            Returns a list of all possible jumps.
+        Returns a list of all possible jumps.
 
-            A legal move is represented by an integer with exactly two
-            bits turned on: the old position and the new position.
+        A legal move is represented by an integer with exactly two
+        bits turned on: the old position and the new position.
 
-            Jumps are indicated with a negative sign.
+        Jumps are indicated with a negative sign.
         """
         rfj = self.right_forward_jumps()
         lfj = self.left_forward_jumps()
@@ -215,16 +221,18 @@ class CheckerBoard:
 
     def jumps_from(self, piece):
         """
-            Returns list of all possible jumps from the piece indicated.
+        Returns list of all possible jumps from the piece indicated.
 
-            The argument piece should be of the form 2**n, where n + 1 is
-            the square of the piece in question (using the internal numeric
-            representaiton of the board).
+        The argument piece should be of the form 2**n, where n + 1 is
+        the square of the piece in question (using the internal numeric
+        representation of the board).
         """
         if self.active == BLACK:
             rfj = (self.empty >> 8) & (self.pieces[self.passive] >> 4) & piece
             lfj = (self.empty >> 10) & (self.pieces[self.passive] >> 5) & piece
-            if piece & self.backward[self.active]: # piece at square is a king
+
+            # piece at square is a king
+            if piece & self.backward[self.active]:
                 rbj = (self.empty << 8) & (self.pieces[self.passive] << 4) & piece
                 lbj = (self.empty << 10) & (self.pieces[self.passive] << 5) & piece
             else:
@@ -233,7 +241,9 @@ class CheckerBoard:
         else:
             rbj = (self.empty << 8) & (self.pieces[self.passive] << 4) & piece
             lbj = (self.empty << 10) & (self.pieces[self.passive] << 5) & piece
-            if piece & self.forward[self.active]: # piece at square is a king
+
+            # piece at square is a king
+            if piece & self.forward[self.active]:
                 rfj = (self.empty >> 8) & (self.pieces[self.passive] >> 4) & piece
                 lfj = (self.empty >> 10) & (self.pieces[self.passive] >> 5) & piece
             else:
@@ -251,7 +261,7 @@ class CheckerBoard:
 
     def takeable(self, piece):
         """
-            Returns true of the passed piece can be taken by the active player.
+        Returns true of the passed piece can be taken by the active player.
         """
         active = self.active
         if (self.forward[active] & (piece >> 4)) != 0 and (self.empty & (piece << 4)) != 0:
@@ -267,24 +277,27 @@ class CheckerBoard:
     def is_over(self):
         return len(self.get_moves()) == 0
 
+    @property
+    def winner(self):
+        """
+        Returns id of player or None when game is not finished.
+        """
+        if not self.is_over():
+            return None
+
+        if self.active == WHITE:
+            return BLACK
+        return WHITE
+
     def copy(self):
         """
-            Returns a new board with the exact same state as the calling object.
+        Returns a new board with the exact same state as the calling object.
         """
-        B = CheckerBoard()
-        B.active = self.active
-        B.backward = [x for x in self.backward]
-        B.empty = self.empty
-        B.forward = [x for x in self.forward]
-        B.jump = self.jump
-        B.mandatory_jumps = [x for x in self.mandatory_jumps]
-        B.passive = self.passive
-        B.pieces = [x for x in self.pieces]
-        return B
+        return deepcopy(self)
 
     def __str__(self):
         """
-            Prints out ASCII art representation of board.
+        Prints out ASCII art representation of board.
         """
 
         EMPTY = -1
@@ -321,7 +334,7 @@ class CheckerBoard:
         for i in range(9):
             board[2*i] = ["+", " - "] + ["+", " - "]*7 + ["+", "\n"]
             if i < 8:
-              board[2*i + 1] = ["|", "   "] \
+                board[2*i + 1] = ["|", "   "] \
                              + [a for subl in [["|", "   "] for _ in range(7)] for a in subl] \
                              + ["|", "\n"]
 
