@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import time
 from datetime import datetime
 
 from checkers import CheckerBoard, BLACK, WHITE
@@ -13,38 +13,45 @@ log_file = open(filename, 'w')
 
 
 class TestAnalyzer():
-    def __init__(self, agent1, agent2, games=100):
+    """
+    Test class
+    """
+    summary_text = """
+        Average played rounds: {rounds_average}
+        Black wins: {score_black}
+        White wins: {score_white}
+        Unresolved games: {score_unresolved}
+        Black thinking time (avg): {time_black}
+        White thinking time (avg): {time_white}
+    """
+
+    def __init__(self, black_agent, white_agent, games=100):
         self.players = {
-            BLACK: agent1,
-            WHITE: agent2,
+            BLACK: black_agent,
+            WHITE: white_agent,
         }
         self.games_count = games
+        self.stats = {
+            "played_rounds": 0,
+            "score": [],
+            "thinking_time": {BLACK: [], WHITE: []},
+        }
 
     def run(self):
-        played_rounds = 0
-        winners = []
-
         try:
             for number in range(1, self.games_count + 1):
                 print("Game: %d" % number)
                 log_file.write("########### GAME %3d ###########\n" % number)
-                winner, rounds = self.run_single_game()
-                winners.append(winner)
-                played_rounds += rounds
+                self.run_single_game()
         except KeyboardInterrupt:
-            print("Test interrupted on" % number)
+            print("Test interrupted on %d" % number)
 
-        summary = "Average played rounds: {}\nBlack/White: {}/{}".format(
-            played_rounds / self.games_count,
-            winners.count(BLACK),
-            winners.count(WHITE)
-        )
-        print(summary)
-        log_file.write(summary)
+        self.print_summary()
 
     def run_single_game(self):
         board = CheckerBoard()
         turn = 0
+        unresolved = False
 
         while not board.is_over():
             turn += 1
@@ -56,18 +63,35 @@ class TestAnalyzer():
             if turn % 100 == 0:
                 print("Over %d turns played" % turn)
 
-            for color, agent in self.players.items():
-                while not board.is_over() and board.active == color:
-                    board.update(agent.best_move(board))
+            for player, agent in self.players.items():
+                while not board.is_over() and board.active == player:
+                    print("Player %d is making a decision" % player)
+                    start_time = time.time()
+                    move = agent.best_move(board)
+                    self.stats["thinking_time"][player].append(time.time() - start_time)
+                    board.update(move)
 
-            if turn > 1000:
+            if turn > 200:
+                unresolved = True
                 break
 
-        log_file.write("#### Summary\n")
-        log_file.write("## Winner: %s\n" % board.winner)
-        log_file.write("## Total rounds: %s\n" % turn)
+        self.stats["score"].append(board.winner if not unresolved else -1)
+        self.stats["played_rounds"] += turn
 
-        return board.winner, turn
+    def print_summary(self):
+        score = self.stats["score"]
+        thinking_time = self.stats["thinking_time"]
+
+        summary = self.summary_text.format(
+            rounds_average=self.stats["played_rounds"] / self.games_count,
+            score_black=score.count(BLACK),
+            time_black=sum(thinking_time[BLACK]) / len(thinking_time[BLACK]),
+            score_white=score.count(WHITE),
+            time_white=sum(thinking_time[WHITE]) / len(thinking_time[WHITE]),
+            score_unresolved=score.count(-1),
+        )
+        print(summary)
+        log_file.write(summary)
 
 
 if '__main__' == __name__:

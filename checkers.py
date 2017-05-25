@@ -47,9 +47,6 @@ class CheckerBoard:
         self.jump = 0
         self.mandatory_jumps = []
 
-    def make_move(self, move):
-        self.update(move)
-
     def update(self, move):
         """
         Updates the game state to reflect the effects of the input
@@ -58,8 +55,7 @@ class CheckerBoard:
         A legal move is represented by an integer with exactly two
         bits turned on: the old position and the new position.
         """
-        active = self.active
-        passive = self.passive
+        active, passive = self.active, self.passive
         if move < 0:
             move *= -1
             taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(move)[::-1]) if b == '1')/2)
@@ -100,9 +96,9 @@ class CheckerBoard:
         A legal move is represented by an integer with exactly two
         bits turned on: the old position and the new position.
         """
-        board = self.copy()
-        active = board.active
-        passive = board.passive
+        board = deepcopy(self)
+        active, passive = board.active, board.passive
+
         if move < 0:
             move *= -1
             taken_piece = int(1 << sum(i for (i, b) in enumerate(bin(move)[::-1]) if b == '1')/2)
@@ -182,18 +178,17 @@ class CheckerBoard:
             return jumps
 
         # If not, then find normal moves
-        else:
-            rf = self.right_forward()
-            lf = self.left_forward()
-            rb = self.right_backward()
-            lb = self.left_backward()
+        rf = self.right_forward()
+        lf = self.left_forward()
+        rb = self.right_backward()
+        lb = self.left_backward()
 
-            moves = [0x11 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
-            moves += [0x21 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
-            moves += [0x11 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
-            moves += [0x21 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
+        moves = [0x11 << i for (i, bit) in enumerate(bin(rf)[::-1]) if bit == '1']
+        moves += [0x21 << i for (i, bit) in enumerate(bin(lf)[::-1]) if bit == '1']
+        moves += [0x11 << i - 4 for (i, bit) in enumerate(bin(rb)[::-1]) if bit == '1']
+        moves += [0x21 << i - 5 for (i, bit) in enumerate(bin(lb)[::-1]) if bit == '1']
 
-            return moves
+        return moves
 
     def get_jumps(self):
         """
@@ -275,7 +270,7 @@ class CheckerBoard:
         return False
 
     def is_over(self):
-        return len(self.get_moves()) == 0
+        return not len(self.get_moves())
 
     @property
     def winner(self):
@@ -289,88 +284,49 @@ class CheckerBoard:
             return BLACK
         return WHITE
 
-    def copy(self):
+    def get_board(self):
         """
-        Returns a new board with the exact same state as the calling object.
+        Returns representation of current state in list of list object.
         """
-        return deepcopy(self)
+        black_king = self.backward[BLACK]
+        black_men = self.forward[BLACK] ^ black_king
+        white_king = self.forward[WHITE]
+        white_men = self.backward[WHITE] ^ white_king
+
+        fields = [1 << x for i, x in enumerate(range(35), start=1) if i % 9 != 0]
+        grouped_fields = [fields[i:i+4] for i in range(0, len(fields), 4)]
+
+        board = []
+        for row in grouped_fields[::-1]:
+            board_rows = []
+            for cell in row[::-1]:
+                if cell & black_men:
+                    item = "b"
+                elif cell & white_men:
+                    item = "w"
+                elif cell & black_king:
+                    item = "B"
+                elif cell & white_king:
+                    item = "W"
+                else:
+                    item = " "
+                board_rows.append(item)
+            board.append(board_rows)
+
+        return board
 
     def __str__(self):
         """
         Prints out ASCII art representation of board.
         """
+        board = self.get_board()
+        representation = "-----------------------------------------------\n"
 
-        EMPTY = -1
-        BLACK_KING = 2
-        WHITE_KING = 3
-
-        if self.active == BLACK:
-            black_kings = self.backward[self.active]
-            black_men = self.forward[self.active] ^ black_kings
-            white_kings = self.forward[self.passive]
-            white_men = self.backward[self.passive] ^ white_kings
-        else:
-            black_kings = self.backward[self.passive]
-            black_men = self.forward[self.passive] ^ black_kings
-            white_kings = self.forward[self.active]
-            white_men = self.backward[self.active] ^ white_kings
-
-        state = [[None for _ in range(8)] for _ in range(4)]
-        for i in range(4):
-            for j in range(8):
-                cell = 1 << (9*i + j)
-                if cell & black_men:
-                    state[i][j] = BLACK
-                elif cell & white_men:
-                    state[i][j] = WHITE
-                elif cell & black_kings:
-                    state[i][j] = BLACK_KING
-                elif cell & white_kings:
-                    state[i][j] = WHITE_KING
-                else:
-                    state[i][j] = EMPTY
-
-        board = [None] * 17
-        for i in range(9):
-            board[2*i] = ["+", " - "] + ["+", " - "]*7 + ["+", "\n"]
-            if i < 8:
-                board[2*i + 1] = ["|", "   "] \
-                             + [a for subl in [["|", "   "] for _ in range(7)] for a in subl] \
-                             + ["|", "\n"]
-
-        for i, chunk in enumerate(state):
-            for j, cell in enumerate(chunk):
-                if j < 4:
-                    if cell == BLACK:
-                        board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
-                                "b" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    elif cell == WHITE:
-                        board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
-                                "w" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    elif cell == BLACK_KING:
-                        board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
-                                "B" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    elif cell == WHITE_KING:
-                        board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
-                                "W" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    else:
-                        board[2*(7 - 2*i) + 1][2*(6 - 2*j) + 1] = \
-                                " " + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                else:
-                    if cell == BLACK:
-                        board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
-                                "b" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    elif cell == WHITE:
-                        board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
-                                "w" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    elif cell == BLACK_KING:
-                        board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
-                                "B" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    elif cell == WHITE_KING:
-                        board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
-                                "W" + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-                    else:
-                        board[2*(6 - 2*i) + 1][2*(7 - 2*j) - 1] = \
-                                " " + str(1 + j + 8*i) + (' ' if j + 8*i < 9 else '')
-
-        return "".join(map(lambda x: "".join(x), board))
+        for i, row in enumerate(board):
+            representation += "  "
+            representation += "   |  " if i % 2 == 0 else ""
+            representation += "  |     |  ".join(row)
+            representation += "  |" if i % 2 != 0 else ""
+            representation += "\n"
+            representation += "-----------------------------------------------\n"
+        return representation
